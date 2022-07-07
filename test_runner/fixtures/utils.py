@@ -86,3 +86,12 @@ def get_dir_size(path: str) -> int:
             totalbytes += os.path.getsize(os.path.join(root, name))
 
     return totalbytes
+
+
+def get_scale_for_db(size_mb: int) -> int:
+    """Returns pgbench scale factor for given target db size in MB.
+
+    Ref https://www.cybertec-postgresql.com/en/a-formula-to-calculate-pgbench-scaling-factor-for-target-db-size/
+    """
+
+    return round(0.06689 * size_mb - 0.5)

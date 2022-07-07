@@ -96,7 +96,7 @@ jobs:
         # since it might generate duplicates when calling ingest_perf_test_result.py
         rm -rf perf-report-staging
         mkdir -p perf-report-staging
-        ./scripts/pytest test_runner/performance/ -v -m "remote_cluster" --skip-interfering-proc-check --out-dir perf-report-staging --timeout 3600
+        ./scripts/pytest test_runner/performance/ -v -m "remote_cluster" -m "not manual" --skip-interfering-proc-check --out-dir perf-report-staging --timeout 3600
 
     - name: Submit result
       env:

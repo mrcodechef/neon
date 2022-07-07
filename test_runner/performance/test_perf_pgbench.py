@@ -1,17 +1,14 @@
-from contextlib import closing
-from fixtures.neon_fixtures import PgBin, VanillaPostgres, NeonEnv, profiling_supported
-from fixtures.compare_fixtures import PgCompare, VanillaCompare, NeonCompare
-
-from fixtures.benchmark_fixture import PgBenchRunResult, MetricReport, NeonBenchmarker
-from fixtures.log_helper import log
-
-from pathlib import Path
-
-import pytest
-from datetime import datetime
 import calendar
 import os
 import timeit
+from datetime import datetime
+from pathlib import Path
+
+import pytest
+from fixtures.benchmark_fixture import MetricReport, PgBenchRunResult
+from fixtures.compare_fixtures import NeonCompare, PgCompare
+from fixtures.neon_fixtures import profiling_supported
+from fixtures.utils import get_scale_for_db
 
 
 def utc_now_timestamp() -> int:
@@ -97,6 +94,11 @@ def get_scales_matrix(default: int = 10):
     return list(map(int, scales.split(",")))
 
 
+def get_db_size_matrix(default: int = 1):
+    scales = os.getenv("TEST_PG_BENCH_DB_SIZE_MB_MATRIX", default=str(default))
+    return list(map(int, scales.split(",")))
+
+
 # Run the pgbench tests against vanilla Postgres and neon
 @pytest.mark.parametrize("scale", get_scales_matrix())
 @pytest.mark.parametrize("duration", get_durations_matrix())
@@ -131,4 +133,13 @@ profiling="page_requests"
 @pytest.mark.parametrize("duration", get_durations_matrix())
 @pytest.mark.remote_cluster
 def test_pgbench_remote(remote_compare: PgCompare, scale: int, duration: int):
+    run_test_pgbench(remote_compare, scale, duration)
+
+
+@pytest.mark.parametrize("db_size", get_db_size_matrix())
+@pytest.mark.parametrize("duration", get_durations_matrix())
+@pytest.mark.remote_cluster
+@pytest.mark.manual
+def test_pgbench_manual(remote_compare: PgCompare, db_size: int, duration: int):
+    scale = get_scale_for_db(db_size)
     run_test_pgbench(remote_compare, scale, duration)
