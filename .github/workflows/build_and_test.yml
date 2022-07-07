@@ -200,9 +200,7 @@ jobs:
 
 
   pg_regress-tests:
-    name: 'pg_regress-tests'
-    runs-on: [ dev ]
-    container: ghcr.io/catthehacker/ubuntu:act-22.04
+    runs-on: [ self-hosted, Linux, k8s-runner ]
     needs: [ build-neon ]
     strategy:
       fail-fast: false
@@ -229,9 +227,7 @@ jobs:
         uses: ./.github/actions/save-coverage-data
 
   other-tests:
-    name: 'other-tests'
-    runs-on: [ dev ]
-    container: ghcr.io/catthehacker/ubuntu:act-22.04
+    runs-on: [ self-hosted, Linux, k8s-runner ]
     needs: [ build-neon ]
     strategy:
       fail-fast: false
@@ -257,9 +253,7 @@ jobs:
         uses: ./.github/actions/save-coverage-data
 
   benchmarks:
-    name: 'benchmarks'
-    runs-on: [ dev ]
-    container: ghcr.io/catthehacker/ubuntu:act-22.04
+    runs-on: [ self-hosted, Linux, k8s-runner ]
     needs: [ build-neon ]
     strategy:
       fail-fast: false
