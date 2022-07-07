@@ -1,28 +1,21 @@
+# TODO: Revert all the changes before the merge
+# This should be moved to a separate workflow and here only for testing purposes
 name: benchmarking
 
 on:
-  # uncomment to run on push for debugging your PR
-  # push:
-  #   branches: [ your branch ]
-  schedule:
-    # * is a special character in YAML so you have to quote this string
-    #          ┌───────────── minute (0 - 59)
-    #          │ ┌───────────── hour (0 - 23)
-    #          │ │ ┌───────────── day of the month (1 - 31)
-    #          │ │ │ ┌───────────── month (1 - 12 or JAN-DEC)
-    #          │ │ │ │ ┌───────────── day of the week (0 - 6 or SUN-SAT)
-    - cron:  '36 7 * * *' # run once a day, timezone is utc
-
-  workflow_dispatch: # adds ability to run this manually
+  workflow_dispatch:
+    inputs:
+      db_size:
+        description: "Database target size in MB"
+        require: false
+        default: 1
+      duration:
+        description: "Duration of pgbench test in seconds (doesn't include pgbench init)"
+        require: false
+        default: 1
 
 jobs:
   bench:
-    # this workflow runs on self hosteed runner
-    # it's environment is quite different from usual guthub runner
-    # probably the most important difference is that it doesn't start from clean workspace each time
-    # e g if you install system packages they are not cleaned up since you install them directly in host machine
-    # not a container or something
-    # See documentation for more info: https://docs.github.com/en/actions/hosting-your-own-runners/about-self-hosted-runners
     runs-on: [self-hosted, zenith-benchmarker]
 
     env:
@@ -32,75 +25,37 @@ jobs:
     - name: Checkout zenith repo
       uses: actions/checkout@v3
 
-    # actions/setup-python@v2 is not working correctly on self-hosted runners
-    # see https://github.com/actions/setup-python/issues/162
-    # and probably https://github.com/actions/setup-python/issues/162#issuecomment-865387976 in particular
-    # so the simplest solution to me is to use already installed system python and spin virtualenvs for job runs.
-    # there is Python 3.7.10 already installed on the machine so use it to install poetry and then use poetry's virtuealenvs
     - name: Install poetry & deps
       run: |
         python3 -m pip install --upgrade poetry wheel
         # since pip/poetry caches are reused there shouldn't be any troubles with install every time
         ./scripts/pysync
 
-    - name: Show versions
-      run: |
-        echo Python
-        python3 --version
-        poetry run python3 --version
-        echo Poetry
-        poetry --version
-        echo Pgbench
-        $POSTGRES_DISTRIB_DIR/bin/pgbench --version
-
-    # FIXME cluster setup is skipped due to various changes in console API
-    # for now pre created cluster is used. When API gain some stability
-    # after massive changes dynamic cluster setup will be revived.
-    # So use pre created cluster. It needs to be started manually, but stop is automatic after 5 minutes of inactivity
     - name: Setup cluster
       env:
-        BENCHMARK_CONNSTR: "${{ secrets.BENCHMARK_STAGING_CONNSTR }}"
+        BENCHMARK_CONNSTR: "${{ secrets.BIGDB_STAGING_CONNSTR }}"
       shell: bash
       run: |
         set -e
 
         echo "Starting cluster"
-        # wake up the cluster
         $POSTGRES_DISTRIB_DIR/bin/psql $BENCHMARK_CONNSTR -c "SELECT 1"
 
     - name: Run benchmark
-      # pgbench is installed system wide from official repo
-      # https://download.postgresql.org/pub/repos/yum/13/redhat/rhel-7-x86_64/
-      # via
-      # sudo tee /etc/yum.repos.d/pgdg.repo<<EOF
-      # [pgdg13]
-      # name=PostgreSQL 13 for RHEL/CentOS 7 - x86_64
-      # baseurl=https://download.postgresql.org/pub/repos/yum/13/redhat/rhel-7-x86_64/
-      # enabled=1
-      # gpgcheck=0
-      # EOF
-      # sudo yum makecache
-      # sudo yum install postgresql13-contrib
-      # actual binaries are located in /usr/pgsql-13/bin/
       env:
-        # The pgbench test runs two tests of given duration against each scale.
-        # So the total runtime with these parameters is 2 * 2 * 300 = 1200, or 20 minutes.
-        # Plus time needed to initialize the test databases.
-        TEST_PG_BENCH_DURATIONS_MATRIX: "300"
-        TEST_PG_BENCH_SCALES_MATRIX: "10,100"
+        TEST_PG_BENCH_DURATIONS_MATRIX: "${{ github.event.inputs.duration }}"
+        TEST_PG_BENCH_DB_SIZE_MB_MATRIX: "${{ github.event.inputs.db_size }}"
         PLATFORM: "neon-staging"
-        BENCHMARK_CONNSTR: "${{ secrets.BENCHMARK_STAGING_CONNSTR }}"
+        BENCHMARK_CONNSTR: "${{ secrets.BIGDB_STAGING_CONNSTR }}"
         REMOTE_ENV: "1" # indicate to test harness that we do not have zenith binaries locally
       run: |
-        # just to be sure that no data was cached on self hosted runner
-        # since it might generate duplicates when calling ingest_perf_test_result.py
         rm -rf perf-report-staging
         mkdir -p perf-report-staging
-        ./scripts/pytest test_runner/performance/ -v -m "remote_cluster" -m "not manual" --skip-interfering-proc-check --out-dir perf-report-staging --timeout 3600
+        ./scripts/pytest test_runner/performance/ -v -m "remote_cluster" -m "manual" --skip-interfering-proc-check --out-dir perf-report-staging --timeout 86400
 
     - name: Submit result
       env:
         VIP_VAP_ACCESS_TOKEN: "${{ secrets.VIP_VAP_ACCESS_TOKEN }}"
         PERF_TEST_RESULT_CONNSTR: "${{ secrets.PERF_TEST_RESULT_CONNSTR }}"
       run: |
-        REPORT_FROM=$(realpath perf-report-staging) REPORT_TO=staging scripts/generate_and_push_perf_report.sh
+        REPORT_FROM=$(realpath perf-report-staging) REPORT_TO=staging_big scripts/generate_and_push_perf_report.sh

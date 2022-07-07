@@ -75,11 +75,31 @@ def run_test_pgbench(env: PgCompare, scale: int, duration: int):
 
     # Run simple-update workload
     run_pgbench(env,
-                "simple-update", ['pgbench', '-N', '-c4', f'-T{duration}', '-P2', env.pg.connstr()])
+                "simple-update",
+                [
+                    'pgbench',
+                    '-N',
+                    '-c4',
+                    '-j2',
+                    f'-T{duration}',
+                    '-P2',
+                    '--progress-timestamp',
+                    env.pg.connstr(),
+                ])
 
     # Run SELECT workload
     run_pgbench(env,
-                "select-only", ['pgbench', '-S', '-c4', f'-T{duration}', '-P2', env.pg.connstr()])
+                "select-only",
+                [
+                    'pgbench',
+                    '-S',
+                    '-c4',
+                    '-j2',
+                    f'-T{duration}',
+                    '-P2',
+                    '--progress-timestamp',
+                    env.pg.connstr(),
+                ])
 
     env.report_size()
 
