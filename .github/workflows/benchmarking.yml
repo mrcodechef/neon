@@ -59,3 +59,12 @@ jobs:
         PERF_TEST_RESULT_CONNSTR: "${{ secrets.PERF_TEST_RESULT_CONNSTR }}"
       run: |
         REPORT_FROM=$(realpath perf-report-staging) REPORT_TO=staging_big scripts/generate_and_push_perf_report.sh
+
+    - name: Upload pgbench logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        retention-days: 7
+        if-no-files-found: warn
+        name: pgbench-${{ inputs.db_size }}mb-${{ inputs.duration }}s-logs
+        path: test_output/**/*pgbench_*.*

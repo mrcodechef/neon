@@ -30,8 +30,12 @@ def subprocess_capture(capture_dir: str, cmd: List[str], **kwargs: Any) -> str:
 
     with open(stdout_filename, 'w') as stdout_f:
         with open(stderr_filename, 'w') as stderr_f:
-            log.info('(capturing output to "{}.stdout")'.format(base))
-            subprocess.run(cmd, **kwargs, stdout=stdout_f, stderr=stderr_f)
+            log.info(f'(capturing output to "{base}.stdout" and "{base}.stderr")')
+            try:
+                subprocess.run(cmd, **kwargs, stdout=stdout_f, stderr=stderr_f)
+            finally:
+                stdout_f.flush()
+                stderr_f.flush()
 
     return basepath
 
