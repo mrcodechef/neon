@@ -115,7 +115,7 @@ def get_scales_matrix(default: int = 10):
 
 
 def get_db_size_matrix(default: int = 1):
-    scales = os.getenv("TEST_PG_BENCH_DB_SIZE_MB_MATRIX", default=str(default))
+    scales = os.getenv("TEST_PG_BENCH_DB_SIZE_GB_MATRIX", default=str(default))
     return list(map(int, scales.split(",")))
 
 
@@ -161,5 +161,5 @@ def test_pgbench_remote(remote_compare: PgCompare, scale: int, duration: int):
 @pytest.mark.remote_cluster
 @pytest.mark.manual
 def test_pgbench_manual(remote_compare: PgCompare, db_size: int, duration: int):
-    scale = get_scale_for_db(db_size)
-    run_test_pgbench(remote_compare, scale, duration)
+    scale = get_scale_for_db(db_size * 1024)
+    run_test_pgbench(remote_compare, scale, duration * 60)

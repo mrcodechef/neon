@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       db_size:
-        description: "Database target size in MB"
+        description: "Database target size in GB"
         require: false
         default: 1
       duration:
-        description: "Duration of pgbench test in seconds (doesn't include pgbench init)"
+        description: "Duration of pgbench test in minutes (doesn't include pgbench init)"
         require: false
         default: 1
 
@@ -44,7 +44,7 @@ jobs:
     - name: Run benchmark
       env:
         TEST_PG_BENCH_DURATIONS_MATRIX: "${{ github.event.inputs.duration }}"
-        TEST_PG_BENCH_DB_SIZE_MB_MATRIX: "${{ github.event.inputs.db_size }}"
+        TEST_PG_BENCH_DB_SIZE_GB_MATRIX: "${{ github.event.inputs.db_size }}"
         PLATFORM: "neon-staging"
         BENCHMARK_CONNSTR: "${{ secrets.BIGDB_STAGING_CONNSTR }}"
         REMOTE_ENV: "1" # indicate to test harness that we do not have zenith binaries locally
@@ -66,5 +66,5 @@ jobs:
       with:
         retention-days: 7
         if-no-files-found: warn
-        name: pgbench-${{ inputs.db_size }}mb-${{ inputs.duration }}s-logs
+        name: pgbench-${{ inputs.db_size }}gb-${{ inputs.duration }}m-logs
         path: test_output/**/*pgbench_*.*
