@@ -1,11 +1,12 @@
 from contextlib import closing, contextmanager
 import psycopg2.extras
 import pytest
-from fixtures.neon_fixtures import NeonEnvBuilder
+from fixtures.neon_fixtures import NeonEnv, NeonEnvBuilder
 from fixtures.log_helper import log
 import time
 from fixtures.neon_fixtures import Postgres
 import threading
+import timeit
 
 pytest_plugins = ("fixtures.neon_fixtures")
 
@@ -147,6 +148,35 @@ def test_backpressure_received_lsn_lag(neon_env_builder: NeonEnvBuilder):
         log.info('check thread stopped')
     else:
         assert False, "WAL lag overflowed configured threshold. That means backpressure doesn't work."
+
+
+def test_restart_delay(neon_simple_env: NeonEnv):
+    env = neon_simple_env
+
+    env.neon_cli.create_branch('test')
+    pg = env.postgres.create('test')
+    # pg.config(['log_min_messages=DEBUG2'])
+    pg.start()
+
+    # general enough WALs to exceed the maximum write lag
+    pg.safe_psql_many(queries=[
+        'CREATE TABLE foo(key int primary key)',
+        'INSERT INTO foo SELECT generate_series(1, 100000)',
+    ])
+
+    log.info("sleep 15s to trigger the background writer")
+    time.sleep(15)
+
+    env.pageserver.stop()
+    env.safekeepers[0].stop()
+    env.safekeepers[0].start()
+    env.pageserver.start()
+
+    timer = timeit.default_timer()
+    pg.safe_psql('INSERT INTO foo SELECT generate_series(100001, 100100)')
+    duration = timeit.default_timer() - timer
+    # insert 100 rows should not take too much time
+    assert duration < 2.0
 
 
 #TODO test_backpressure_disk_consistent_lsn_lag. Play with pageserver's checkpoint settings
