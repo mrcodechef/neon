@@ -170,9 +170,12 @@ def test_restart_delay(neon_simple_env: NeonEnv):
         log.info("Waiting for the pageserver to catch up with the compute")
         for _ in range(20):  # At most 20s
             # Query the pageserver first, so we don't care how stale its response is:
-            pageserver_last_record_lsn = lsn_from_hex(env.pageserver.http_client().timeline_detail(tenant_id, timeline_id)['local']['last_record_lsn'])
+            pageserver_last_record_lsn = lsn_from_hex(env.pageserver.http_client().timeline_detail(
+                tenant_id, timeline_id)['local']['last_record_lsn'])
             last_wal = lsn_from_hex(pg.safe_psql('SELECT pg_current_wal_insert_lsn()')[0][0])
-            log.info(f"pageserver is at {lsn_to_hex(pageserver_last_record_lsn)}, last_wal is {lsn_to_hex(last_wal)}")
+            log.info(
+                f"pageserver is at {lsn_to_hex(pageserver_last_record_lsn)}, last_wal is {lsn_to_hex(last_wal)}"
+            )
             assert pageserver_last_record_lsn <= last_wal
             if pageserver_last_record_lsn >= last_wal:
                 break
