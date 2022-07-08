@@ -2,6 +2,7 @@ from contextlib import closing, contextmanager
 import psycopg2.extras
 import pytest
 from fixtures.neon_fixtures import NeonEnv, NeonEnvBuilder
+from fixtures.utils import lsn_from_hex, lsn_to_hex
 from fixtures.log_helper import log
 import time
 from fixtures.neon_fixtures import Postgres
@@ -151,22 +152,44 @@ def test_backpressure_received_lsn_lag(neon_env_builder: NeonEnvBuilder):
 
 
 def test_restart_delay(neon_simple_env: NeonEnv):
+    # See discussion at https://github.com/neondatabase/neon/issues/2023
     env = neon_simple_env
 
-    env.neon_cli.create_branch('test')
-    pg = env.postgres.create('test')
-    # pg.config(['log_min_messages=DEBUG2'])
+    tenant_id = env.initial_tenant
+    timeline_id = env.neon_cli.create_branch('test_restart_delay')
+    pg = env.postgres.create('test_restart_delay')
     pg.start()
 
-    # general enough WALs to exceed the maximum write lag
+    # Generate enough WALs to exceed the maximum write lag
     pg.safe_psql_many(queries=[
         'CREATE TABLE foo(key int primary key)',
         'INSERT INTO foo SELECT generate_series(1, 100000)',
     ])
 
-    log.info("sleep 15s to trigger the background writer")
-    time.sleep(15)
+    def wait_pageserver_sync():
+        log.info("Waiting for the pageserver to catch up with the compute")
+        for _ in range(20):  # At most 20s
+            # Query the pageserver first, so we don't care how stale its response is:
+            pageserver_last_record_lsn = lsn_from_hex(env.pageserver.http_client().timeline_detail(tenant_id, timeline_id)['local']['last_record_lsn'])
+            last_wal = lsn_from_hex(pg.safe_psql('SELECT pg_current_wal_insert_lsn()')[0][0])
+            log.info(f"pageserver is at {lsn_to_hex(pageserver_last_record_lsn)}, last_wal is {lsn_to_hex(last_wal)}")
+            assert pageserver_last_record_lsn <= last_wal
+            if pageserver_last_record_lsn >= last_wal:
+                break
+            time.sleep(1)
+        else:
+            assert False, "Timeout: the pageserver did not caught up with the compute"
 
+    wait_pageserver_sync()
+    log.info("Restarting compute node so it does not send LogStandbySnapshot right away")
+    pg.stop()
+    pg.start()
+
+    # We hope that the following operations take significantly less
+    # than LOG_SNAPSHOT_INTERVAL_MS (15s), so if the query is blocked by backpressure,
+    # it's not unblocked by LogStandbySnapshot sending new WAL.
+    wait_pageserver_sync()
+    log.info("Restarting pageserver and safekeeper")
     env.pageserver.stop()
     env.safekeepers[0].stop()
     env.safekeepers[0].start()
@@ -176,6 +199,7 @@ def test_restart_delay(neon_simple_env: NeonEnv):
     pg.safe_psql('INSERT INTO foo SELECT generate_series(100001, 100100)')
     duration = timeit.default_timer() - timer
     # insert 100 rows should not take too much time
+    log.info(f"The query took {duration}s")
     assert duration < 2.0
 
 
