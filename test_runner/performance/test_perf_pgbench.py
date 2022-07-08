@@ -84,6 +84,7 @@ def run_test_pgbench(env: PgCompare, scale: int, duration: int):
                     f'-T{duration}',
                     '-P2',
                     '--progress-timestamp',
+                    '--no-vacuum',
                     env.pg.connstr(),
                 ])
 
@@ -98,6 +99,7 @@ def run_test_pgbench(env: PgCompare, scale: int, duration: int):
                     f'-T{duration}',
                     '-P2',
                     '--progress-timestamp',
+                    '--no-vacuum',
                     env.pg.connstr(),
                 ])
 
